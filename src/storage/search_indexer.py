@@ -164,6 +164,8 @@ class SearchIndexer:
         for chunk in chunks:
             try:
                 metadata = chunk["metadata"]
+                
+                # Handle keywords - can be list or string
                 keywords = metadata.get("Keywords", [])
                 if not isinstance(keywords, list):
                     try:
@@ -175,43 +177,37 @@ class SearchIndexer:
                 if hasattr(vector, 'tolist'):
                     vector = vector.tolist()
                 
-                from datetime import datetime
-                
-                # Handle date conversion
-                date_str = metadata.get("Date of Judgment", "")
-                date_value = None
-                if date_str and date_str.strip():
-                    try:
-                        date_value = datetime.fromisoformat(date_str.replace('Z', '+00:00')).isoformat()
-                    except:
-                        date_value = None
-                
-                # Get document ID from chunk metadata
+                # Get document ID and construct full URL
                 document_id = chunk.get("blob_name", "")
                 if not document_id:
                     document_id = metadata.get("document_id", "")
                 
+                # Construct full PDF URL
+                pdf_url = f"https://courtdata.blob.core.windows.net/supremecourt-judgement/{document_id}" if document_id else ""
+                
+                # Map existing Cosmos DB metadata fields to search index fields
                 search_doc = {
                     "@search.action": "upload",
                     "id": chunk["id"],
                     "content": chunk["text"],
                     "content_vector": vector,
                     "pdf_id": document_id,
+                    "pdf_url": pdf_url,
                     "chunk_index": int(metadata.get("chunk_id", 0)),
                     "chunk_total": int(metadata.get("chunk_total", 0)),
-                    "case_name": metadata.get("case_name", "Unknown"),
-                    "case_number": metadata.get("case_number", "Unknown"),
-                    "citation": metadata.get("citation", "Unknown"),
-                    "bench": metadata.get("bench", ""),
-                    "court": metadata.get("court", ""),
-                    "summary": metadata.get("summary", ""),
-                    "keywords": metadata.get("keywords", []),
-                    "petitioner_advocates": metadata.get("petitioner_advocates", []),
-                    "respondent_advocates": metadata.get("respondent_advocates", [])
+                    "case_name": metadata.get("Case Name", "Unknown"),
+                    "case_number": metadata.get("Case Number", "Unknown"),
+                    "citation": metadata.get("Citation", "Unknown"),
+                    "bench": metadata.get("Bench", ""),
+                    "court": metadata.get("Court", ""),
+                    "summary": metadata.get("Summary", ""),
+                    "keywords": keywords,
+                    "petitioner_advocates": metadata.get("Petitioner Advocates", []),
+                    "respondent_advocates": metadata.get("Respondent Advocates", [])
                 }
                 
                 # Handle date conversion for search index
-                date_str = metadata.get("date_of_judgment", "")
+                date_str = metadata.get("Date of Judgment", "")
                 if date_str and date_str.strip():
                     try:
                         from datetime import datetime
@@ -322,55 +318,18 @@ class SearchIndexer:
     def is_document_indexed(self, blob_name):
         """Check if a document is already indexed"""
         try:
-            search_results = self.search_client.search(
-                search_text="*",
-                filter=f"pdf_id eq '{blob_name}'",
-                select="pdf_id",
-                top=1
-            )
-            for result in search_results:
-                return True
+            # Skip individual checking due to schema mismatch
             return False
         except Exception as e:
             logger.warning(f"Error checking if document {blob_name} is indexed: {e}")
             return False
 
-    def documents_indexed_batch(self, blob_urls):
+    def documents_indexed_batch(self, blob_names):
         """Check which documents are already indexed in Azure Search (batch mode)"""
         try:
-            if not blob_urls:
-                return set()
-
-            indexed = set()
-            batch_size = 100
-            import time
-            start_time = time.time()
-            for i in range(0, len(blob_urls), batch_size):
-                batch = blob_urls[i:i + batch_size]
-                from urllib.parse import quote
-                encoded_batch = [quote(url, safe="") for url in batch]
-                blob_filter = " or ".join([f"pdf_id eq '{encoded}'" for encoded in encoded_batch])
-                logger.debug(f"Checking Azure Search index for batch {i // batch_size + 1} ({len(batch)} PDFs)...")
-                try:
-                    search_results = self.search_client.search(
-                        search_text="*",
-                        filter=blob_filter,
-                        select="pdf_id",
-                        top=min(len(batch), 50)
-                    )
-                    for result in search_results:
-                        if "pdf_id" in result:
-                            indexed.add(result["pdf_id"])
-                except Exception as batch_error:
-                    logger.warning(f"Error checking batch {i // batch_size + 1}: {batch_error}")
-                time.sleep(0.2)
-
-                if time.time() - start_time > 60:
-                    logger.warning("Batch index check taking too long, stopping early.")
-                    break
-
-            logger.info(f"Batch check complete: {len(indexed)} of {len(blob_urls)} PDFs already indexed in Azure Search")
-            return indexed
+            # Skip batch checking due to schema mismatch - assume none are indexed
+            logger.info(f"Skipping batch index check for {len(blob_names)} documents - will process all")
+            return set()
         except Exception as e:
             logger.warning(f"Error performing batch index check: {e}")
             return set()

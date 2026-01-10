@@ -180,11 +180,18 @@ class PDFProcessingPipeline:
         if not all_documents:
             return {"total_documents": 0, "indexed_chunks": 0}
         
+        # Get all blob names and check which are already indexed (batch mode)
+        blob_names = [doc.get("blob_name") for doc in all_documents if doc.get("blob_name")]
+        print(f"Checking which of {len(blob_names)} documents are already indexed...")
+        
+        already_indexed = self.search_indexer.documents_indexed_batch(blob_names)
+        print(f"Found {len(already_indexed)} documents already indexed")
+        
         # Filter out already indexed documents
         documents_to_index = []
         for doc in all_documents:
             blob_name = doc.get("blob_name")
-            if blob_name and not self.search_indexer.is_document_indexed(blob_name):
+            if blob_name and blob_name not in already_indexed:
                 documents_to_index.append(doc)
         
         print(f"Filtering: {len(documents_to_index)} documents need indexing")
@@ -217,15 +224,17 @@ class PDFProcessingPipeline:
                 except:
                     pass
             
-            # Prepare documents for indexing
+            # Prepare documents for indexing using existing metadata from Cosmos DB
             documents = []
             for doc in batch:
                 blob_name = doc.get("blob_name")
                 if blob_name in texts_dict and texts_dict[blob_name]:
+                    # Use the metadata from Cosmos DB directly
+                    cosmos_metadata = doc.get("metadata", {})
                     documents.append({
                         "blob_name": blob_name,
                         "success": True,
-                        "metadata": doc.get("metadata", {}),
+                        "metadata": cosmos_metadata,
                         "text": texts_dict[blob_name]
                     })
             

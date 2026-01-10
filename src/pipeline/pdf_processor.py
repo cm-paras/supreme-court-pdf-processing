@@ -70,7 +70,7 @@ class PDFProcessor:
                 logger.error(f"Failed to store document {pdf_id} in Cosmos DB")
                 return False
             
-            # Chunk and index
+            # Chunk and index using the extracted metadata
             documents = [{
                 "blob_name": blob_name,
                 "success": True,
@@ -152,24 +152,43 @@ class PDFProcessor:
                     try:
                         existing_doc = self.storage.get_document_by_blob_name(blob_url)
                         if existing_doc:
-                            metadata = existing_doc.get("metadata", {})
-                            text_sample = existing_doc.get("text_sample", "")
-                            documents = [{
-                                "blob_name": blob_url,
-                                "success": True,
-                                "metadata": metadata,
-                                "text": text_sample
-                            }]
-                            chunks = self.chunker.chunk_batch(documents)
-                            if chunks:
-                                chunks_with_embeddings = self.embedding_generator.generate_embeddings(chunks)
-                                succeeded, failed = self.indexer.upload_chunks(chunks_with_embeddings)
-                                if succeeded > 0:
-                                    logger.info(f"Indexed existing document {blob_url} successfully.")
-                                    results['skipped'] += 1
-                                    continue
+                            # Use existing metadata from Cosmos DB
+                            cosmos_metadata = existing_doc.get("metadata", {})
+                            
+                            # Download PDF to get full text for chunking
+                            local_paths = self.downloader.download_batch([blob_url])
+                            if local_paths:
+                                texts = self.text_extractor.extract_batch(local_paths)
+                                if texts:
+                                    full_text = list(texts.values())[0]
+                                    documents = [{
+                                        "blob_name": blob_url,
+                                        "success": True,
+                                        "metadata": cosmos_metadata,
+                                        "text": full_text
+                                    }]
+                                    chunks = self.chunker.chunk_batch(documents)
+                                    if chunks:
+                                        chunks_with_embeddings = self.embedding_generator.generate_embeddings(chunks)
+                                        succeeded, failed = self.indexer.upload_chunks(chunks_with_embeddings)
+                                        if succeeded > 0:
+                                            logger.info(f"Indexed existing document {blob_url} successfully.")
+                                            results['skipped'] += 1
+                                            # Clean up
+                                            for path in local_paths.values():
+                                                if path and os.path.exists(path):
+                                                    os.remove(path)
+                                            continue
+                                        else:
+                                            logger.warning(f"Failed to index existing document {blob_url}. Proceeding to reprocess.")
+                                    # Clean up
+                                    for path in local_paths.values():
+                                        if path and os.path.exists(path):
+                                            os.remove(path)
                                 else:
-                                    logger.warning(f"Failed to index existing document {blob_url}. Proceeding to reprocess.")
+                                    logger.warning(f"Failed to extract text for existing document {blob_url}. Proceeding to reprocess.")
+                            else:
+                                logger.warning(f"Failed to download existing document {blob_url}. Proceeding to reprocess.")
                         else:
                             logger.warning(f"Document {blob_url} metadata not found in Cosmos DB. Proceeding to reprocess.")
                     except Exception as e:

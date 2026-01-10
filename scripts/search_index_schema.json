@@ -17,6 +17,13 @@
       "retrievable": true
     },
     {
+      "name": "pdf_url",
+      "type": "Edm.String",
+      "searchable": false,
+      "filterable": false,
+      "retrievable": true
+    },
+    {
       "name": "content",
       "type": "Edm.String",
       "searchable": true,

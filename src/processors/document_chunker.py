@@ -70,6 +70,7 @@ class DocumentChunker:
     
     def _get_identifier(self, metadata, blob_name):
         """Get document identifier for chunk IDs"""
+        # Handle existing Cosmos DB metadata format
         identifier = metadata.get("Case Number", "Unknown")
         if identifier in [None, "", "Unknown"]:
             identifier = metadata.get("Case Name", "Unknown")

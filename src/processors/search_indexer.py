@@ -64,6 +64,15 @@ class SearchIndexer:
         """Prepare chunk for search index."""
         metadata = chunk.metadata or {}
         
+        # Handle keywords - can be list or string
+        keywords = metadata.get("Keywords", [])
+        if not isinstance(keywords, list):
+            try:
+                import json
+                keywords = json.loads(keywords) if isinstance(keywords, str) else []
+            except:
+                keywords = []
+        
         return {
             "id": chunk.chunk_id,
             "pdf_id": chunk.pdf_id,
@@ -71,16 +80,16 @@ class SearchIndexer:
             "content_vector": chunk.embedding_vector,
             "chunk_index": chunk.chunk_index,
             "chunk_total": chunk.chunk_total,
-            "case_name": metadata.get("case_name", ""),
-            "case_number": metadata.get("case_number", ""),
-            "citation": metadata.get("citation", ""),
-            "date_of_judgment": metadata.get("date_of_judgment", ""),
-            "bench": metadata.get("bench", ""),
-            "court": metadata.get("court", ""),
-            "summary": metadata.get("summary", ""),
-            "keywords": metadata.get("keywords", []),
-            "petitioner_advocates": metadata.get("petitioner_advocates", []),
-            "respondent_advocates": metadata.get("respondent_advocates", []),
+            "case_name": metadata.get("Case Name", ""),
+            "case_number": metadata.get("Case Number", ""),
+            "citation": metadata.get("Citation", ""),
+            "date_of_judgment": metadata.get("Date of Judgment", ""),
+            "bench": metadata.get("Bench", ""),
+            "court": metadata.get("Court", ""),
+            "summary": metadata.get("Summary", ""),
+            "keywords": keywords,
+            "petitioner_advocates": metadata.get("Petitioner Advocates", []),
+            "respondent_advocates": metadata.get("Respondent Advocates", []),
             "created_at": datetime.utcnow().isoformat()
         }
     

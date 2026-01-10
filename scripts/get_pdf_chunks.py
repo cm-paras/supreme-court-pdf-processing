@@ -9,6 +9,7 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 from src.config.settings import AZURE_CONFIG
+import json
 
 def get_pdf_chunks(pdf_url):
     config = AZURE_CONFIG
@@ -36,7 +37,7 @@ def get_pdf_chunks(pdf_url):
         "filter": f"pdf_id eq '{pdf_url}'",
         "orderby": "chunk_index asc",
         "top": 1000,
-        "select": "chunk_index,chunk_total,content"
+        "select": "chunk_index,chunk_total,content,case_name"
     }
     
     response = requests.post(search_url, headers=headers, json=search_payload)
@@ -47,6 +48,8 @@ def get_pdf_chunks(pdf_url):
         return
     
     data = response.json()
+    with open("response.json", "w") as f:
+        json.dump(data, f, indent=4)
     chunks = data.get("value", [])
     
     if not chunks:
@@ -68,4 +71,4 @@ def get_pdf_chunks(pdf_url):
         print()
 
 if __name__ == "__main__":
-    get_pdf_chunks("https://courtdata.blob.core.windows.net/highcourt-judgement/89a49144-bfbe-4526-8f9a-211313b3a9af.pdf")
+    get_pdf_chunks("https://courtdata.blob.core.windows.net/highcourt-judgement/f5bb5b04-8401-4148-9994-d50e99b83566.pdf")
